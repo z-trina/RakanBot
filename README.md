@@ -1,6 +1,6 @@
 RakanBot 
 
-Hey all, we need to collect raw data that measures metrics like reactions, messages, etc. from students to know our user completion rate of our modules. We also collect information like state, school, data, for other analysis. 
+Hey all, we need to collect raw data that measures metrics like reactions, messages, etc. from students to know stuff like user completion rate of modules. We also collect information like state, school, data, for other analysis. 
 
 Currently (28/7), I've gotten it to be able to send dm polls to users to collect demographic data, which I plan on executing every time a new user onboards. It can also somewhat track reactions on every message, telling you who reacted. 
 
