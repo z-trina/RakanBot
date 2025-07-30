@@ -36,88 +36,102 @@ async def on_message(message):
 
 # Command to create a Student Info Poll
 # List of schools (customize this list)
-SCHOOLS = ["SMK Subang Utama", "SMK USJ12", "SMK Seafield", "SMK Chong Hwa"]
-STATES = ["Selangor", "Kuala Lumpur", "Penang", "Johor", "Sabah", "Sarawak", "Melaka", "Negeri Sembilan", "Perak", "Pahang", "Terengganu", "Kelantan", "Perlis", "Kedah"]
+STATE_SCHOOLS = {
+    "Selangor": ["SMK Subang Utama", "SMK USJ12", "SMK Seafield"],
+    "Kuala Lumpur": ["SMK Chong Hwa"],
+    "Penang": ["Penang Free School", "Convent Green Lane"],
+    "Johor": ["SMK Dato Jaafar"," SMK Taman Daya", "SMK Sultan Ismail"],
+    "Melaka": ["SMK Tinggi Melaka", "SMK St. Francis"],
+    "Perak": ["SMK Anderson", "SMK St. Michael"],
+    # Add more states and schools here...
+}
 
-#Student Info command
-@bot.command()
-async def studentInfo(ctx):
-    # School selection
-    # Build poll message with emojis
-    emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣"]  # Supports up to 4 schools
-    description = "\n".join([f"{emojis[i]} - {SCHOOLS[i]}" for i in range(len(SCHOOLS))])
-    poll_msg = await ctx.author.send(
-        f"**Which school are you from?**\n\n{description}\n\nReact with the corresponding emoji."
-    )
+STATES = list(STATE_SCHOOLS.keys())
 
-    # Add reaction options
-    for i in range(len(SCHOOLS)):
-        await poll_msg.add_reaction(emojis[i])
-
-    def check(reaction, user):
-        return (
-            user == ctx.author
-            and str(reaction.emoji) in emojis
-            and reaction.message.id == poll_msg.id
-        )
-
+async def studentInfo(member):
     try:
-        # Wait for reaction (60s timeout)
+        # --- 1. Ask for State ---
+        indicator_emojis = [chr(0x1F1E6 + i) for i in range(len(STATES))]  # 🇦 to 🇿
+        state_options = "\n".join([f"{indicator_emojis[i]} {state}" for i, state in enumerate(STATES)])
+        state_msg = await member.send("📍 Please select your **state**:\n" + state_options)
 
-        reaction, user = await bot.wait_for('reaction_add', timeout=60, check=check)
-        selected_index = emojis.index(str(reaction.emoji))
-        selected_school = SCHOOLS[selected_index]
+        for emoji in indicator_emojis[:len(STATES)]:
+            await state_msg.add_reaction(emoji)
 
-        await ctx.author.send(f"✅ Thanks! You selected **{selected_school}**.")
+        def check_state(reaction, user):
+            return (
+                user == member and
+                str(reaction.emoji) in indicator_emojis[:len(STATES)] and
+                reaction.message.id == state_msg.id
+            )
 
-        # Gender selection
-        gender_msg = await ctx.author.send("Please select your gender:\n1️⃣ Male\n2️⃣ Female")
+        reaction, user = await bot.wait_for('reaction_add', timeout=60, check=check_state)
+        selected_state_index = indicator_emojis.index(str(reaction.emoji))
+        selected_state = STATES[selected_state_index]
+
+        await member.send(f"✅ You selected **{selected_state}**.")
+
+        # --- 2. Ask for School based on selected state ---
+        schools = STATE_SCHOOLS[selected_state]
+        school_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
+        description = "\n".join([f"{school_emojis[i]} - {schools[i]}" for i in range(len(schools))])
+        school_msg = await member.send(f"🏫 Select your **school** in {selected_state}:\n\n{description}")
+
+        for i in range(len(schools)):
+            await school_msg.add_reaction(school_emojis[i])
+
+        def check_school(reaction, user):
+            return (
+                user == member and
+                str(reaction.emoji) in school_emojis[:len(schools)] and
+                reaction.message.id == school_msg.id
+            )
+
+        reaction, user = await bot.wait_for('reaction_add', timeout=60, check=check_school)
+        selected_school = schools[school_emojis.index(str(reaction.emoji))]
+
+        await member.send(f"✅ You selected **{selected_school}**.")
+
+        # --- 3. Gender Selection ---
+        gender_msg = await member.send("👤 Please select your **gender**:\n1️⃣ Male\n2️⃣ Female")
         await gender_msg.add_reaction("1️⃣")
         await gender_msg.add_reaction("2️⃣")
 
         def check_gender(reaction, user):
             return (
-                user == ctx.author
-                and str(reaction.emoji) in ["1️⃣", "2️⃣"]
-                and reaction.message.id == gender_msg.id
+                user == member and
+                str(reaction.emoji) in ["1️⃣", "2️⃣"] and
+                reaction.message.id == gender_msg.id
             )
 
-        reaction , user = await bot.wait_for('reaction_add', timeout=60, check=check_gender)
-        if str(reaction.emoji) == "1️⃣":
-            selected_gender = "Male"
-        else:
-            selected_gender = "Female"
-        await ctx.author.send(f"✅ You selected **{selected_gender}**.")
+        reaction, user = await bot.wait_for('reaction_add', timeout=60, check=check_gender)
+        selected_gender = "Male" if str(reaction.emoji) == "1️⃣" else "Female"
 
-        # State selection
-        # Use regional indicator emojis for A-Z (up to 26 states)
-        indicator_emojis = [chr(0x1F1E6 + i) for i in range(len(STATES))]  # 🇦 to 🇿
+        await member.send(f"✅ You selected **{selected_gender}**.")
 
-        state_options = "\n".join([f"{indicator_emojis[i]} {state}" for i, state in enumerate(STATES)])
-        state_msg = await ctx.author.send("Please select your state:\n" + state_options)
-        for emoji in indicator_emojis:
-            await state_msg.add_reaction(emoji)
-
-        def check_state(reaction, user):
-            return (
-            user == ctx.author
-            and str(reaction.emoji) in indicator_emojis
-            and reaction.message.id == state_msg.id
-            )
-
-        reaction, user = await bot.wait_for('reaction_add', timeout=60, check=check_state)
-        selected_index = indicator_emojis.index(str(reaction.emoji))
-        selected_state = STATES[selected_index]
-        await ctx.author.send(f"✅ You selected **{selected_state}**.")
-        # Save asynchronously
-
+        # --- 4. Save to CSV ---
         async with aiofiles.open('Student_data.csv', mode='a', newline='', encoding='utf-8') as file:
-            row = f"{user.name},{user.id},{selected_school},{selected_gender},{selected_state}\n"
+            row = f"{member.name},{member.id},{selected_state},{selected_school},{selected_gender}\n"
             await file.write(row)
 
+        await member.send("✅ Your data has been saved successfully!")
 
     except asyncio.TimeoutError:
-        await ctx.author.send('⏳ You didn\'t react in time! type "!studentInfo" to try again.')
+        await member.send('⏳ You didn\'t react in time! Type `!studentInfo` to try again.')
+    except discord.Forbidden:
+        print(f"❌ Couldn't DM {member.name}. They probably have DMs disabled.")
+
+#Make the demographic questions work on onboard as well
+@bot.event
+async def on_member_join(member):
+    await member.send("Welcome to the server! Please take a moment to fill out your demographic information.")
+    await studentInfo(member)
+
+@bot.command(name="studentInfo")
+async def student_info_command(ctx):
+    await studentInfo(ctx.author)
+
+
 
 # Retrieve the last two messages sent in the channel by anyone (excluding the bot)
 @bot.command()
@@ -191,4 +205,4 @@ async def retrieve_reactions(ctx, message_id: int):
 
 
 
-bot.run(token, log_handler=handler, log_level=logging.DEBUG)
+bot.run(token, log_handler=handler, log_level=logging.DEBUG) 
