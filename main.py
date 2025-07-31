@@ -4,8 +4,9 @@ import logging
 from dotenv import load_dotenv
 import os
 import asyncio 
-import aiofiles #AI said this is better for async file operations
+import aiofiles #AI said this is better for async file operations, maybe not needed anymore, we want to save to gspreadsheet
 import csv
+import webserver
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
@@ -204,5 +205,5 @@ async def retrieve_reactions(ctx, message_id: int):
         await ctx.send("No users reacted to this message.")
 
 
-
+webserver.keep_alive()  # Start the web server to keep the bot alive
 bot.run(token, log_handler=handler, log_level=logging.DEBUG) 
