@@ -110,10 +110,16 @@ async def studentInfo(member):
 
         await member.send(f"✅ You selected **{selected_gender}**.")
 
-        # --- 4. Save to CSV ---
+        # --- 4. Save to CSV --- (Not needed)
+        '''
         async with aiofiles.open('Student_data.csv', mode='a', newline='', encoding='utf-8') as file:
             row = f"{member.name},{member.id},{selected_state},{selected_school},{selected_gender}\n"
             await file.write(row)
+        '''
+        # --- 5. Save to Google Sheets ---
+        # Save to Google Sheets
+        import RakanSheets
+        RakanSheets.save_to_google_sheets([[member.name, member.id, selected_state, selected_school, selected_gender]])
 
         await member.send("✅ Your data has been saved successfully!")
 
@@ -121,6 +127,8 @@ async def studentInfo(member):
         await member.send('⏳ You didn\'t react in time! Type `!studentInfo` to try again.')
     except discord.Forbidden:
         print(f"❌ Couldn't DM {member.name}. They probably have DMs disabled.")
+
+        
 
 #Make the demographic questions work on onboard as well
 @bot.event
@@ -132,7 +140,24 @@ async def on_member_join(member):
 async def student_info_command(ctx):
     await studentInfo(ctx.author)
 
+#Talking to Gsheet 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# getting reactions and messages:
 
 # Retrieve the last two messages sent in the channel by anyone (excluding the bot)
 @bot.command()

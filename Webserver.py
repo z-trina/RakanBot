@@ -1,3 +1,5 @@
+#Webserver to trick render into thinking the bot is a webservice so we can use the free tier
+
 from flask import Flask
 from threading import Thread
 
