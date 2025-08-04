@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 import os
 import asyncio 
 import aiofiles #AI said this is better for async file operations, maybe not needed anymore, we want to save to gspreadsheet
-import csv
 import webserver
 
 load_dotenv()
@@ -37,11 +36,12 @@ async def on_message(message):
 
 # Command to create a Student Info Poll
 # List of schools (customize this list)
+# List of schools
 STATE_SCHOOLS = {
     "Selangor": ["SMK Subang Utama", "SMK USJ12", "SMK Seafield"],
     "Kuala Lumpur": ["SMK Chong Hwa"],
     "Penang": ["Penang Free School", "Convent Green Lane"],
-    "Johor": ["SMK Dato Jaafar"," SMK Taman Daya", "SMK Sultan Ismail"],
+    "Johor": ["SMK Dato Jaafar", "SMK Taman Daya", "SMK Sultan Ismail"],
     "Melaka": ["SMK Tinggi Melaka", "SMK St. Francis"],
     "Perak": ["SMK Anderson", "SMK St. Michael"],
     # Add more states and schools here...
@@ -49,112 +49,104 @@ STATE_SCHOOLS = {
 
 STATES = list(STATE_SCHOOLS.keys())
 
+# === Reusable Question Helper ===
+async def ask_question(member, question_text, options, timeout=60):
+    """
+    Ask a question via DM with emoji options and wait for a valid response.
+    options: List of (emoji, option_text)
+    Returns: option_text (or None if timed out)
+    """
+    option_text = "\n".join([f"{emoji} {text}" for emoji, text in options])
+    msg = await member.send(f"{question_text}\n\n{option_text}")
+
+    for emoji, _ in options:
+        await msg.add_reaction(emoji)
+
+    def check(reaction, user):
+        return user == member and reaction.message.id == msg.id and str(reaction.emoji) in dict(options)
+
+    try:
+        reaction, _ = await bot.wait_for("reaction_add", timeout=timeout, check=check)
+        return dict(options)[str(reaction.emoji)]
+    except asyncio.TimeoutError:
+        await member.send("⏳ You didn’t respond in time!")
+        return None
+
+# === Ask for Text Response ===
+async def ask_text_response(member, prompt, max_length=64, timeout=60):
+    await member.send(f"{prompt}\n\n✏️ Please reply with your answer (max {max_length} characters).")
+
+    def check(message):
+        return message.author == member and isinstance(message.channel, discord.DMChannel)
+
+    try:
+        msg = await bot.wait_for("message", timeout=timeout, check=check)
+        if len(msg.content) > max_length:
+            await member.send(f"⚠️ Your message was too long. Please keep it under {max_length} characters.")
+            return await ask_text_response(member, prompt, max_length, timeout)
+        return msg.content
+    except asyncio.TimeoutError:
+        await member.send("⏳ You didn’t reply in time!")
+        return None
+
+
+# === Main Poll Function ===
 async def studentInfo(member):
     try:
-        # --- 1. Ask for State ---
-        indicator_emojis = [chr(0x1F1E6 + i) for i in range(len(STATES))]  # 🇦 to 🇿
-        state_options = "\n".join([f"{indicator_emojis[i]} {state}" for i, state in enumerate(STATES)])
-        state_msg = await member.send("📍 Please select your **state**:\n" + state_options)
+        # 1. Ask for State
+        state_emojis = [chr(0x1F1E6 + i) for i in range(len(STATES))]  # 🇦, 🇧, ...
+        state_options = list(zip(state_emojis, STATES))
+        selected_state = await ask_question(member, "📍 Please select your **state**:", state_options)
+        if not selected_state:
+            return
 
-        for emoji in indicator_emojis[:len(STATES)]:
-            await state_msg.add_reaction(emoji)
-
-        def check_state(reaction, user):
-            return (
-                user == member and
-                str(reaction.emoji) in indicator_emojis[:len(STATES)] and
-                reaction.message.id == state_msg.id
-            )
-
-        reaction, user = await bot.wait_for('reaction_add', timeout=60, check=check_state)
-        selected_state_index = indicator_emojis.index(str(reaction.emoji))
-        selected_state = STATES[selected_state_index]
-
-        await member.send(f"✅ You selected **{selected_state}**.")
-
-        # --- 2. Ask for School based on selected state ---
+        # 2. Ask for School
         schools = STATE_SCHOOLS[selected_state]
         school_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
-        description = "\n".join([f"{school_emojis[i]} - {schools[i]}" for i in range(len(schools))])
-        school_msg = await member.send(f"🏫 Select your **school** in {selected_state}:\n\n{description}")
+        school_options = list(zip(school_emojis[:len(schools)], schools))
+        selected_school = await ask_question(member, f"🏫 Select your **school** in {selected_state}:", school_options)
+        if not selected_school:
+            return
 
-        for i in range(len(schools)):
-            await school_msg.add_reaction(school_emojis[i])
+        # 3. Ask for Gender
+        gender_options = [("1️⃣", "Male"), ("2️⃣", "Female")]
+        selected_gender = await ask_question(member, "👤 Please select your **gender**:", gender_options)
+        if not selected_gender:
+            return
+        
+        # 4. Ask for Nickname
+        student_nickname = await ask_text_response(member, "📝 Please give us your full name")
+        if not student_nickname:
+            return  # exits if timeout or failure
+        
+        # Ask if used Discord before
+        yes_no = [("👍", "Yes"), ("👎", "No")]
+        used_discord = await ask_question(member, "❓ Have you used Discord before? (If unsure, select 'No')", yes_no)
+        if not used_discord:
+            return  # exits if timeout or failure
 
-        def check_school(reaction, user):
-            return (
-                user == member and
-                str(reaction.emoji) in school_emojis[:len(schools)] and
-                reaction.message.id == school_msg.id
-            )
-
-        reaction, user = await bot.wait_for('reaction_add', timeout=60, check=check_school)
-        selected_school = schools[school_emojis.index(str(reaction.emoji))]
-
-        await member.send(f"✅ You selected **{selected_school}**.")
-
-        # --- 3. Gender Selection ---
-        gender_msg = await member.send("👤 Please select your **gender**:\n1️⃣ Male\n2️⃣ Female")
-        await gender_msg.add_reaction("1️⃣")
-        await gender_msg.add_reaction("2️⃣")
-
-        def check_gender(reaction, user):
-            return (
-                user == member and
-                str(reaction.emoji) in ["1️⃣", "2️⃣"] and
-                reaction.message.id == gender_msg.id
-            )
-
-        reaction, user = await bot.wait_for('reaction_add', timeout=60, check=check_gender)
-        selected_gender = "Male" if str(reaction.emoji) == "1️⃣" else "Female"
-
-        await member.send(f"✅ You selected **{selected_gender}**.")
-
-        # --- 4. Save to CSV --- (Not needed)
-        '''
-        async with aiofiles.open('Student_data.csv', mode='a', newline='', encoding='utf-8') as file:
-            row = f"{member.name},{member.id},{selected_state},{selected_school},{selected_gender}\n"
-            await file.write(row)
-        '''
-        # --- 5. Save to Google Sheets ---
         # Save to Google Sheets
         import RakanSheets
-        RakanSheets.save_to_google_sheets([[member.name, member.id, selected_state, selected_school, selected_gender]])
+        RakanSheets.save_to_google_sheets([[student_nickname,member.name, member.id, selected_state, selected_school, selected_gender,used_discord]])
 
         await member.send("✅ Your data has been saved successfully!")
 
-    except asyncio.TimeoutError:
-        await member.send('⏳ You didn\'t react in time! Type `!studentInfo` to try again.')
     except discord.Forbidden:
         print(f"❌ Couldn't DM {member.name}. They probably have DMs disabled.")
 
-        
-
-#Make the demographic questions work on onboard as well
+# === Trigger on New Join ===
 @bot.event
 async def on_member_join(member):
-    await member.send("Welcome to the server! Please take a moment to fill out your demographic information.")
-    await studentInfo(member)
+    try:
+        await member.send("👋 Welcome to the server! Please take a moment to fill out your demographic information.")
+        await studentInfo(member)
+    except discord.Forbidden:
+        print(f"❌ Couldn't DM {member.name} on join.")
 
+# === Manual Command Trigger ===
 @bot.command(name="studentInfo")
 async def student_info_command(ctx):
     await studentInfo(ctx.author)
-
-#Talking to Gsheet 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # getting reactions and messages:
