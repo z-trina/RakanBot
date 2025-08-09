@@ -38,13 +38,34 @@ async def on_message(message):
 # List of schools (customize this list)
 # List of schools
 STATE_SCHOOLS = {
-    "Selangor": ["SMK Subang Utama", "SMK USJ12", "SMK Seafield"],
-    "Kuala Lumpur": ["SMK Chong Hwa"],
-    "Penang": ["Penang Free School", "Convent Green Lane"],
-    "Johor": ["SMK Dato Jaafar", "SMK Taman Daya", "SMK Sultan Ismail"],
-    "Melaka": ["SMK Tinggi Melaka", "SMK St. Francis"],
-    "Perak": ["SMK Anderson", "SMK St. Michael"],
-    # Add more states and schools here...
+    "Negeri Sembilan": [
+        "Permata Insan"
+    ],
+    "Kuala Lumpur": [
+        "Bandar Tun Razak",
+        "Tutors in Action",
+        "Desa Petaling",
+        "Sri Eden"
+    ],
+    "Sarawak": [
+        "St. Joseph",
+        "St. Theresa",
+        "Swinburne",
+        "Sg Tapang"
+    ],
+    "Kedah": [
+        "Keat Hwa"
+    ],
+    "Selangor": [
+        "Puchong Utama 1"
+    ],
+    "NGO": [
+        "Tutor in Action",
+        "Sri Eden"
+    ],
+    "University": [
+        "Swinburne Uni"
+    ]
 }
 
 STATES = list(STATE_SCHOOLS.keys())
@@ -96,7 +117,7 @@ async def studentInfo(member):
         # 1. Ask for State
         state_emojis = [chr(0x1F1E6 + i) for i in range(len(STATES))]  # 🇦, 🇧, ...
         state_options = list(zip(state_emojis, STATES))
-        selected_state = await ask_question(member, "📍 Please select your **state**:", state_options)
+        selected_state = await ask_question(member, "Hi, RakanBot here, could you please answer a few questions?\n📍 Choose which best represents your school", state_options)
         if not selected_state:
             return
 
