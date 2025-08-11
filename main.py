@@ -117,7 +117,7 @@ async def studentInfo(member):
         # 1. Ask for State
         state_emojis = [chr(0x1F1E6 + i) for i in range(len(STATES))]  # 🇦, 🇧, ...
         state_options = list(zip(state_emojis, STATES))
-        selected_state = await ask_question(member, "Hi, RakanBot here, could you please answer a few questions?\n📍 Choose which best represents your school", state_options)
+        selected_state = await ask_question(member, "Hi, RakanBot here, could you please answer a few questions for us? Thank you!\n📍 Choose which best represents your school (if you're from an NGO/Uni, choose that)", state_options)
         if not selected_state:
             return
 
@@ -146,9 +146,30 @@ async def studentInfo(member):
         if not used_discord:
             return  # exits if timeout or failure
 
+
+        # Ask for Form (e.g., Form 1, Form 2, etc., or Other)
+        form_options = [
+            ("1️⃣", "Form 1"),
+            ("2️⃣", "Form 2"),
+            ("3️⃣", "Form 3"),
+            ("4️⃣", "Form 4"),
+            ("5️⃣", "Form 5"),
+            ("6️⃣", "Form 6"),
+            ("❓", "Other")
+        ]
+        selected_form = await ask_question(member, "🎓 What is your current **Form** (year/grade)?", form_options)
+        if selected_form == "Other":
+            selected_form = await ask_text_response(member, "📝 Please specify your current Form (year/grade)")
+        if not selected_form:
+            return
+
+        # Get timestamp
+        from datetime import datetime
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
         # Save to Google Sheets
         import RakanSheets
-        RakanSheets.save_to_google_sheets([[student_nickname,member.name, member.id, selected_state, selected_school, selected_gender,used_discord]])
+        RakanSheets.save_to_google_sheets([[student_nickname, member.name, member.id, selected_state, selected_school, selected_gender, used_discord, selected_form, timestamp]])
 
         await member.send("✅ Your data has been saved successfully!")
 

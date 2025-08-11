@@ -26,9 +26,10 @@ values = [
 
 
 def save_to_google_sheets(values): 
+    # Columns: Name, Discord Name, Discord ID, State, School, Gender, Used Discord, Form, Timestamp
     value_range_body = {
-    'majorDimension': 'ROWS',
-    'values': values
+        'majorDimension': 'ROWS',
+        'values': values
     }
 
     service_sheets.spreadsheets().values().append(
