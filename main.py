@@ -163,9 +163,10 @@ async def studentInfo(member):
         if not selected_form:
             return
 
-        # Get timestamp
-        from datetime import datetime
-        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # Get Malaysia time (UTC+8)
+        from datetime import datetime, timedelta, timezone
+        malaysia_tz = timezone(timedelta(hours=8))
+        timestamp = datetime.now(malaysia_tz).strftime('%Y-%m-%d %H:%M:%S')
 
         # Save to Google Sheets
         import RakanSheets
