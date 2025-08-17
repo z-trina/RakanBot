@@ -1,3 +1,5 @@
+#Survey
+
 import discord
 from discord.ext import commands
 import logging
@@ -17,9 +19,14 @@ intents.members = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# Keep a cache of invites
+invite_cache = {}
+
 @bot.event
 async def on_ready():
     print(f"We are ready to go in, {bot.user.name}")
+    for guild in bot.guilds:
+        invite_cache[guild.id] = await guild.invites()
 
 #Detect if a user sends a message with the word "shit"
 @bot.event
@@ -142,9 +149,10 @@ async def studentInfo(member):
         
         # Ask if used Discord before
         yes_no = [("👍", "Yes"), ("👎", "No")]
-        used_discord = await ask_question(member, "❓ Have you used Discord before? (If unsure, select 'No')", yes_no)
-        if not used_discord:
+        used_discord_response = await ask_question(member, "❓ Have you used Discord before? (If unsure, select 'No')", yes_no)
+        if not used_discord_response:
             return  # exits if timeout or failure
+        used_discord = used_discord_response == "Yes"
 
 
         # Ask for Form (e.g., Form 1, Form 2, etc., or Other)
@@ -168,12 +176,27 @@ async def studentInfo(member):
         malaysia_tz = timezone(timedelta(hours=8))
         timestamp = datetime.now(malaysia_tz).strftime('%Y-%m-%d %H:%M:%S')
 
-        # Save to Google Sheets
-        import RakanSheets
-        RakanSheets.save_to_google_sheets([[student_nickname, member.name, member.id, selected_state, selected_school, selected_gender, used_discord, selected_form, timestamp]])
+        # --------- Get user's discord join method ---------------------------
+        used_invite_code = None
+        if hasattr(member, 'guild') and member.guild is not None:
+            invites_before = invite_cache.get(member.guild.id, [])
+            invites_after = await member.guild.invites()
 
-        await member.send("✅ Your data has been saved successfully!")
+            for after in invites_after:
+                before = next((i for i in invites_before if i.code == after.code), None)
+                if before and before.uses < after.uses:
+                    used_invite_code = after.code
+                    break
+            # Update cache
+            invite_cache[member.guild.id] = invites_after
+        # ---------------------------------------------------------------------
 
+        #save user data
+        import RakanSheets  # Assuming you have a module for Google Sheets integration
+        RakanSheets.save_to_google_sheets([[student_nickname, member.name, member.id, selected_state, selected_school, selected_gender, used_discord, selected_form, timestamp, used_invite_code]])
+        await member.send("✅ Thank you for providing your information! Your data has been saved successfully.")
+            
+        
     except discord.Forbidden:
         print(f"❌ Couldn't DM {member.name}. They probably have DMs disabled.")
 
@@ -190,80 +213,6 @@ async def on_member_join(member):
 @bot.command(name="studentInfo")
 async def student_info_command(ctx):
     await studentInfo(ctx.author)
-
-
-# getting reactions and messages:
-
-# Retrieve the last two messages sent in the channel by anyone (excluding the bot)
-@bot.command()
-async def retrieve(ctx):
-    messages = []
-    async for message in ctx.channel.history(limit=10):
-        if message.author != bot.user:
-            messages.append(message)
-        if len(messages) == 2:
-            break
-    if messages:
-        for msg in reversed(messages):
-            await ctx.send(f"Message from {msg.author.name}: {msg.content}")
-    else:
-        await ctx.send("No previous messages found.")
-
-# Retrieve the number of reactions on a specific message by message ID, and identify the users who reacted and how many reactions each user placed
-# Also, save the message ID and number of reactions per user in Student_data.csv
-@bot.command()
-async def retrieve_reactions(ctx, message_id: int):
-    try:
-        message = await ctx.channel.fetch_message(message_id)
-    except discord.NotFound:
-        await ctx.send("Message not found.")
-        return
-    except discord.Forbidden:
-        await ctx.send("I don't have permission to fetch that message.")
-        return
-    except discord.HTTPException:
-        await ctx.send("Failed to fetch the message due to an HTTP error.")
-        return
-
-    reaction_count = sum(reaction.count for reaction in message.reactions)
-    await ctx.send(f"Message ID {message_id} has {reaction_count} reactions.")
-
-    user_reaction_counts = {}
-    for reaction in message.reactions:
-        async for user in reaction.users():
-            if user == bot.user:
-                continue
-            user_reaction_counts[user] = user_reaction_counts.get(user, 0) + 1
-
-    if user_reaction_counts:
-        details = "\n".join(f"{user.name}: {count} reaction(s)" for user, count in user_reaction_counts.items())
-        await ctx.send(f"Users who reacted:\n{details}")
-
-        # Read all lines, update the user's line, and write back
-        async with aiofiles.open('Student_data.csv', mode='r', encoding='utf-8') as file:
-            lines = await file.readlines()
-
-        updated_lines = []
-        for line in lines:
-            parts = line.strip().split(',')
-            if len(parts) < 2:
-                updated_lines.append(line)
-                continue
-            username, userid = parts[0], parts[1]
-            # Check if this user reacted
-            user_obj = next((u for u in user_reaction_counts if str(u.id) == userid), None)
-            if user_obj:
-                # Append message_id and reaction count
-                new_line = line.strip() + f",message_id:{message_id},reactions:{user_reaction_counts[user_obj]}\n"
-                updated_lines.append(new_line)
-            else:
-                updated_lines.append(line)
-
-        async with aiofiles.open('Student_data.csv', mode='w', encoding='utf-8') as file:
-            await file.writelines(updated_lines)
-    else:
-        await ctx.send("No users reacted to this message.")
-
 
 webserver.keep_alive()  # Start the web server to keep the bot alive
 bot.run(token, log_handler=handler, log_level=logging.DEBUG) 

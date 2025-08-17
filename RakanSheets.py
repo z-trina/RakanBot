@@ -2,8 +2,19 @@
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
+import os, sys
+
+def resource_path(filename):
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, filename)
+    return os.path.join(os.path.dirname(__file__), filename)
+
+SERVICE_ACCOUNT_FILE = resource_path('Service_account_rakan.json')
+
+'''
 # Path to your service account key file
 SERVICE_ACCOUNT_FILE = 'Service_account_rakan.json'
+'''
 
 # Create credentials using the service account file
 credentials = service_account.Credentials.from_service_account_file(
