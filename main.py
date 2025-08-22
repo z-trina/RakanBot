@@ -8,6 +8,8 @@ import os
 import asyncio 
 import aiofiles #AI said this is better for async file operations, maybe not needed anymore, we want to save to gspreadsheet
 import webserver
+import uuid
+import datetime
 
 load_dotenv()
 token = os.getenv('DISCORD_TOKEN')
