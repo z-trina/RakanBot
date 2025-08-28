@@ -6,7 +6,7 @@ import logging
 from dotenv import load_dotenv
 import os
 import asyncio 
-import aiofiles #AI said this is better for async file operations, maybe not needed anymore, we want to save to gspreadsheet
+#import aiofiles #AI said this is better for async file operations, maybe not needed anymore, we want to save to gspreadsheet
 import webserver
 
 load_dotenv()
@@ -216,3 +216,8 @@ async def student_info_command(ctx):
 
 webserver.keep_alive()  # Start the web server to keep the bot alive
 bot.run(token, log_handler=handler, log_level=logging.DEBUG) 
+
+#Use venv38: "venv38\Scripts\Activate.ps1"    
+#Pyinstaller guide for running on local old PC: Using pyenv, 3.8.0, need win32 version; might need to delete "dist or build"
+# Run this: C:\Users\Aiden\.pyenv\pyenv-win\versions\3.8.0\python.exe -m PyInstaller main.py
+
