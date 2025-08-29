@@ -2,7 +2,6 @@
 
 import discord
 from discord.ext import commands
-import logging
 from dotenv import load_dotenv
 import os
 import asyncio 
@@ -10,9 +9,8 @@ import asyncio
 import webserver
 
 load_dotenv()
-token = os.getenv('DISCORD_TOKEN')
+Discord_token = os.getenv('DISCORD_TOKEN')
 
-handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
 intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
@@ -215,7 +213,7 @@ async def student_info_command(ctx):
     await studentInfo(ctx.author)
 
 webserver.keep_alive()  # Start the web server to keep the bot alive
-bot.run(token, log_handler=handler, log_level=logging.DEBUG) 
+bot.run(Discord_token) 
 
 #Use venv38: "venv38\Scripts\Activate.ps1"    
 #Pyinstaller guide for running on local old PC: Using pyenv, 3.8.0, need win32 version; might need to delete "dist or build"
