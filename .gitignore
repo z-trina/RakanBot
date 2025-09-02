@@ -216,4 +216,7 @@ General.csv
 join_method.csv
 
 LLM.py
-Sys_prompt.txt
+myenv32/
+user_db.json
+engage_activity.json
+main(old).py
