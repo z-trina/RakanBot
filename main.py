@@ -10,6 +10,9 @@ import asyncio
 from groq import Groq
 import json
 
+#News Fetching dependencies
+from fetch_news import fetch_news_with_content_exa
+
 load_dotenv()
 Discord_token = os.getenv('DISCORD_TOKEN')
 
@@ -157,6 +160,12 @@ async def ask_text_response(member, guild_id, prompt, max_length=64, timeout=60)
         await member.send(messages["timeout2"])
         return None
 
+#Create role / add role helper
+async def get_or_create_role(guild, role_name):
+    role = discord.utils.get(guild.roles, name=role_name)
+    if role is None:
+        role = await guild.create_role(name=role_name)
+    return role
 
 # ======================
 # Main Student Info Flow
@@ -261,6 +270,7 @@ async def on_member_join(member):
 async def student_info_command(ctx):
     await studentInfo(ctx.author, ctx.guild.id)
 
+
 #==============================================
 # AI Community Manager Integration
 #==============================================
@@ -275,22 +285,67 @@ client = Groq(
     api_key=token, 
 )
 
-def generate_engagement_question(): #Connect to LLM and ask for generated engagement question
+def generate_engagement_question():
+    # Fetch recent news (returns list of dicts)
+    news_results = fetch_news_with_content_exa(query="Recent news", location="Malaysia", num_results=3, max_characters=500)
+    # Combine news snippets/titles for the prompt
+    news_summaries = []
+    for item in news_results:
+        title = item.get("title", "")
+        content = item.get("text", "")
+        news_summaries.append(f"{title}: {content}")
+    news_context = "\n".join(news_summaries) if news_summaries else "No recent news found."
+
     ENGAGEMENT_PROMPT = (
-        "You are an AI tutor. Generate a creative, thought-provoking question about AI or machine learning for students. "
-        "Make it open-ended and suitable for beginners or intermediates."
+        "You are an AI tutor. Here is some recent news:\n"
+        f"{news_context}\n"
+        "First, only choose ONE news to cover briefly. Then explain the news in simple terms for students. "
+        "Then, ask one creative, open-ended question about AI or machine learning connected to it. "
+        "Keep it under 2000 characters, preferably around 1000."
     )
     messages = [
         {"role": "system", "content": ENGAGEMENT_PROMPT},
-        {"role": "user", "content": "Give me a random AI question to engage students."}
+        {"role": "user", "content": "Explain the news simply, then ask one related AI/ML question."}
     ]
+
     chat_completion = client.chat.completions.create(
         messages=messages,
         model="llama-3.3-70b-versatile",
-        temperature=1.2  # Higher temperature for more creativity
+        temperature=1.2
     )
     return chat_completion.choices[0].message.content
 
+def generate_engagement_question_indonesian():
+    # Ambil berita terbaru (mengembalikan list of dicts)
+    news_results = fetch_news_with_content_exa(query="Berita AI", location="Indonesia", num_results=3, max_characters=500)
+    # Gabungkan ringkasan berita/judul untuk prompt
+    news_summaries = []
+    for item in news_results:
+        title = item.get("title", "")
+        content = item.get("text", "")
+        news_summaries.append(f"{title}: {content}")
+    news_context = "\n".join(news_summaries) if news_summaries else "Tidak ada berita terbaru yang ditemukan."
+
+    ENGAGEMENT_PROMPT = (
+        "Anda adalah seorang tutor AI. Berikut adalah beberapa berita terbaru:\n"
+        f"{news_context}\n"
+        "Pertama, pilih hanya SATU berita untuk dibahas secara singkat. Kemudian jelaskan berita tersebut dengan sederhana untuk siswa. "
+        "Setelah itu, ajukan satu pertanyaan kreatif dan terbuka tentang AI atau machine learning yang berhubungan dengan berita tersebut. "
+        "Jaga agar jawaban di bawah 2000 karakter, idealnya sekitar 1000 karakter. Tulis dalam Bahasa Indonesia."
+    )
+    messages = [
+        {"role": "system", "content": ENGAGEMENT_PROMPT},
+        {"role": "user", "content": "Jelaskan berita tersebut dengan sederhana, lalu ajukan satu pertanyaan AI/ML yang relevan."}
+    ]
+
+    chat_completion = client.chat.completions.create(
+        messages=messages,
+        model="llama-3.3-70b-versatile",
+        temperature=1.2
+    )
+    return chat_completion.choices[0].message.content
+
+# Just a function to get answers from LLM with system prompt
 with open("Sys_prompt.txt", "r", encoding="utf-8") as f:
     SYSTEM_PROMPT = f.read()
 
@@ -323,10 +378,23 @@ engage_questions_by_id = {}
 
 @bot.command(name="engage")
 async def engage(ctx):
-    question = generate_engagement_question()
+    # Notification line based on language
+    if ctx.guild.id == ENGLISH_SERVER_ID:
+        notif_line = "If you enjoy these challenges, react to this message to get notified of more!"
+    else:
+        notif_line = "Jika kamu suka tantangan seperti ini, beri reaksi pada pesan ini untuk mendapatkan notifikasi tantangan berikutnya!"
+
+    # Get or create the "enthusiast" role
+    role = await get_or_create_role(ctx.guild, "enthusiast")
+    # Send the role mention (ping)
+    await ctx.send(f"{role.mention}")
+    
+    question = generate_engagement_question() if ctx.guild.id == ENGLISH_SERVER_ID else generate_engagement_question_indonesian()
+    full_message = f"{question}\n\n{notif_line}"
+    
     sent_msgs = []
-    for i in range(0, len(question), 2000):
-        sent_msg = await ctx.send(question[i:i+2000])
+    for i in range(0, len(full_message), 2000):
+        sent_msg = await ctx.send(full_message[i:i+2000])
         sent_msgs.append(sent_msg)
     engage_entry = {
         "channel_id": str(ctx.channel.id),
@@ -338,6 +406,24 @@ async def engage(ctx):
     engage_activity.append(engage_entry)
     save_engage_activity(engage_activity)
     engage_questions_by_id[str(sent_msgs[0].id)] = engage_entry
+
+@bot.event
+async def on_reaction_add(reaction, user):
+    if user.bot:
+        return
+    message_id = str(reaction.message.id)
+    if message_id in engage_questions_by_id:
+        guild = reaction.message.guild
+        if guild is None:
+            return  # Only assign roles in guilds
+        role = await get_or_create_role(guild, "enthusiast")
+        member = guild.get_member(user.id)
+        if member and role not in member.roles:
+            await member.add_roles(role)
+            try:
+                await user.send("You've been given the 'enthusiast' role for engaging with the AI question!" if guild.id == ENGLISH_SERVER_ID else "Anda telah diberikan peran 'enthusiast' karena berinteraksi dengan pertanyaan AI!")
+            except discord.Forbidden:
+                pass  # Can't DM user
 
 @bot.command(name="respond")
 async def respond(ctx, *, answer: str):
@@ -370,7 +456,11 @@ async def respond(ctx, *, answer: str):
     messages = [
         {"role": "system", "content": "You are an AI tutor reviewing student engagement. Here is the question and student responses."},
         {"role": "user", "content": engage_entry["question"]}
+    ] if ctx.guild.id == ENGLISH_SERVER_ID else [
+        {"role": "system", "content": "Anda adalah seorang tutor AI yang meninjau keterlibatan siswa. Berikut adalah pertanyaan dan tanggapan siswa."},
+        {"role": "user", "content": engage_entry["question"]}
     ]
+
     # Get the last 8 responses (excluding any previous assistant responses)
     user_responses = [r for r in engage_entry["responses"] if r.get("role", "user") == "user"]
     for resp in user_responses[-8:]:
@@ -397,6 +487,18 @@ async def respond(ctx, *, answer: str):
     save_engage_activity(engage_activity)
     await ctx.send("Your response and the AI's reply have been recorded!")
 
-
-
 bot.run(Discord_token)
+
+#Use venv 32: .\myenv32\Scripts\Activate.ps1
+#Pyinstaller guide for running on local old PC: Using pyenv, 3.8.0, need win32 version; might need to delete "dist or build"
+# Run this: python -m PyInstaller main.py
+# TAKE THE ONE IN DIST!
+# USE WIN 32, since old PC is 32bit, you have to be in the venv running the 32 bit python
+
+# to create the venv 32: C:\Users\Aiden\AppData\Local\Programs\Python\Python38-32\python.exe -m venv myenv32
+
+#Current (1/9) LLM Version: Need to put in Sys_prompt.txt
+'''
+python -m PyInstaller main.py `
+  "--add-data=myenv32\Lib\site-packages\setuptools\_vendor\jaraco\text\Lorem ipsum.txt;setuptools/_vendor/jaraco/text"
+'''
